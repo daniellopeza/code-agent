@@ -19,7 +19,9 @@ async function main() {
   console.log(`Created ${chunks.length} chunks`);
   console.log(`\nThinking...\n`);
 
-  const answer = await askCodebase(question, chunks);
+  console.log("question: ", question);
+
+  const answer = await askCodebase(question, chunks, true);
   console.log(answer);
 }
 

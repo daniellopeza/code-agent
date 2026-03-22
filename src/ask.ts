@@ -5,7 +5,12 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function askCodebase(question: string, chunks: FileChunk[]) {
+export async function askCodebase(
+  question: string,
+  chunks: FileChunk[],
+  dryRun: boolean = false,
+) {
+  // improve relevance: smart retrieval, not bling slicing
   const selected = chunks.slice(0, 12);
 
   const context = selected
@@ -14,6 +19,8 @@ export async function askCodebase(question: string, chunks: FileChunk[]) {
         `FILE: ${chunk.filePath}\nCHUNK: ${chunk.chunkId}\n${chunk.text}`,
     )
     .join("\n\n---\n\n");
+
+  if (dryRun) return "Done without LLM.";
 
   const response = await client.responses.create({
     model: "gpt-4.1",
@@ -29,6 +36,8 @@ export async function askCodebase(question: string, chunks: FileChunk[]) {
       },
     ],
   });
+
+  console.log("context: ", context);
 
   return response.output_text;
 }

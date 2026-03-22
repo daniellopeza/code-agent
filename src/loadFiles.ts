@@ -38,7 +38,12 @@ export function loadFilesRecursive(rootDir: string): RepoFile[] {
       const fullPath = path.join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
-        if (IGNORE_DIRS.has(entry.name)) continue;
+        if (IGNORE_DIRS.has(entry.name)) {
+          console.log("ignoring: ", entry.name);
+          continue;
+        }
+
+        console.log("walk full path: ", fullPath);
         walk(fullPath);
         continue;
       }
