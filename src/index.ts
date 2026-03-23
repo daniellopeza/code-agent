@@ -21,7 +21,7 @@ async function main() {
 
   console.log("question: ", question);
 
-  const answer = await askCodebase(question, chunks, true);
+  const answer = await askCodebase(question, chunks);
   console.log(answer);
 }
 

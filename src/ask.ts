@@ -71,7 +71,7 @@ export async function askCodebase(
     )
     .join("\n\n---\n\n");
 
-  console.log("context: ", context);
+  // console.log("context: ", context);
   if (dryRun) return "Done without LLM.";
 
   const response = await client.responses.create({

@@ -6,7 +6,11 @@ export type FileChunk = {
   text: string;
 };
 
-export function chunkFiles(files: RepoFile[], chunkSize = 1500): FileChunk[] {
+export function chunkFiles(
+  files: RepoFile[],
+  chunkSize = 3000,
+  overlap = 300, // Use overlap so code context is less broken
+): FileChunk[] {
   const chunks: FileChunk[] = [];
 
   for (const file of files) {
@@ -24,7 +28,9 @@ export function chunkFiles(files: RepoFile[], chunkSize = 1500): FileChunk[] {
         text,
       });
 
-      start = end;
+      if (end >= content.length) break;
+
+      start += chunkSize - overlap;
       index++;
     }
   }
