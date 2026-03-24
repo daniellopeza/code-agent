@@ -1,15 +1,16 @@
-import type { RepoFile } from "./loadFiles.ts";
+import type { RepoFile } from "./loadFiles.js";
 
 export type FileChunk = {
   filePath: string;
   chunkId: string;
+  chunkIndex: number;
   text: string;
 };
 
 export function chunkFiles(
   files: RepoFile[],
   chunkSize = 3000,
-  overlap = 300, // Use overlap so code context is less broken
+  overlap = 300,
 ): FileChunk[] {
   const chunks: FileChunk[] = [];
 
@@ -19,12 +20,13 @@ export function chunkFiles(
     let index = 0;
 
     while (start < content.length) {
-      const end = start + chunkSize;
+      const end = Math.min(start + chunkSize, content.length);
       const text = content.slice(start, end);
 
       chunks.push({
         filePath: file.path,
         chunkId: `${file.path}#${index}`,
+        chunkIndex: index,
         text,
       });
 

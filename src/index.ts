@@ -1,9 +1,13 @@
 import "dotenv/config";
 import { loadFilesRecursive } from "./loadFiles.js";
-import { chunkFiles } from "./chunkFiles.js";
 import { askCodebase } from "./ask.js";
 
 async function main() {
+  /**
+   * CLI input:
+   * arg[2] = repo path
+   * arg[3+] = question
+   */
   const repoPath = process.argv[2];
   const question = process.argv.slice(3).join(" ");
 
@@ -12,19 +16,29 @@ async function main() {
     process.exit(1);
   }
 
+  // Step 1: load repo files
   const files = loadFilesRecursive(repoPath);
-  const chunks = chunkFiles(files);
 
   console.log(`Loaded ${files.length} files`);
-  console.log(`Created ${chunks.length} chunks`);
-  console.log(`\nThinking...\n`);
+  console.log(`Thinking...\n`);
 
-  console.log("question: ", question);
+  // Step 2: ask AI using retrieval pipeline
+  const result = await askCodebase(question, files);
 
-  const answer = await askCodebase(question, chunks);
-  console.log(answer);
+  console.log("Top files used:");
+  for (const file of result.topFiles) {
+    console.log(`- ${file.path}`);
+  }
+
+  console.log(`\nSelected chunks: ${result.selectedChunks.length}\n`);
+
+  /**
+   * Final answer from LLM
+   */
+  console.log(result.answer);
 }
 
+// Run program
 main().catch((err) => {
   console.error(err);
   process.exit(1);
