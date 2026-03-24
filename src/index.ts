@@ -2,27 +2,33 @@ import "dotenv/config";
 import { loadFilesRecursive } from "./loadFiles.js";
 import { askCodebase } from "./ask.js";
 
+/**
+ * CLI entry point.
+ *
+ * Expected usage:
+ * npx tsx src/index.ts <repo-path> "<question>"
+ *
+ * Example:
+ * npx tsx src/index.ts ../my-repo "Where is authentication handled?"
+ */
 async function main() {
-  /**
-   * CLI input:
-   * arg[2] = repo path
-   * arg[3+] = question
-   */
   const repoPath = process.argv[2];
   const question = process.argv.slice(3).join(" ");
 
+  // Basic validation so the tool fails clearly instead of behaving strangely.
   if (!repoPath || !question) {
     console.log(`Usage: npx tsx src/index.ts <repo-path> "<question>"`);
     process.exit(1);
   }
 
-  // Step 1: load repo files
+  // Read the target repository into memory.
+  // This returns an array of RepoFile objects.
   const files = loadFilesRecursive(repoPath);
 
   console.log(`Loaded ${files.length} files`);
   console.log(`Running hybrid retrieval...\n`);
 
-  // Step 2: ask AI using retrieval pipeline
+  // Ask the codebase agent to answer the question using retrieved repo context.
   const result = await askCodebase(question, files);
 
   console.log("Top files used:");
@@ -32,10 +38,7 @@ async function main() {
 
   console.log(`\nSelected chunks: ${result.selectedChunks.length}\n`);
 
-  /**
-   * Final answer from LLM
-   */
-  console.log("Response: ");
+  // Final model answer.
   console.log(result.answer);
 }
 
