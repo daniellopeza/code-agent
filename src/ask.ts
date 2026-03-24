@@ -2,8 +2,13 @@ import OpenAI from "openai";
 import type { RepoFile } from "./loadFiles.js";
 import { chunkFiles } from "./chunkFiles.js";
 import type { FileChunk } from "./chunkFiles.js";
+import {
+  embedChunks,
+  embedQuery,
+  cosineSimilarity,
+  type ChunkWithEmbedding,
+} from "./embeddings.js";
 
-// Initialize OpenAI client using API key from .env
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -28,17 +33,8 @@ function uniqueTokens(text: string): string[] {
   return [...new Set(tokenize(text))];
 }
 
-/**
- * Score how relevant a FILE is to the question
- *
- * Why:
- * - We DON'T want to chunk entire repo (too big)
- * - First pick best files, then chunk those
- */
 function scoreFile(question: string, file: RepoFile): number {
   const qTokens = uniqueTokens(question);
-
-  // Use both file name and content
   const filePath = file.path.toLowerCase();
   const contentStart = file.content.slice(0, 8000).toLowerCase();
 
@@ -73,14 +69,8 @@ function scoreFile(question: string, file: RepoFile): number {
   return score;
 }
 
-/**
- * Score how relevant a CHUNK is to the question
- *
- * More granular than file-level scoring
- */
-function scoreChunk(question: string, chunk: FileChunk): number {
+function scoreChunkKeyword(question: string, chunk: FileChunk): number {
   const qTokens = uniqueTokens(question);
-
   const filePath = chunk.filePath.toLowerCase();
   const text = chunk.text.toLowerCase();
 
@@ -88,15 +78,10 @@ function scoreChunk(question: string, chunk: FileChunk): number {
 
   for (const token of qTokens) {
     if (token.length < 2) continue;
-
-    // File name still matters
     if (filePath.includes(token)) score += 8;
-
-    // Content match is more important here
     if (text.includes(token)) score += 4;
   }
 
-  // Same domain-specific boost for auth
   if (question.toLowerCase().includes("auth")) {
     if (
       filePath.includes("auth") ||
@@ -108,8 +93,6 @@ function scoreChunk(question: string, chunk: FileChunk): number {
       score += 10;
     }
   }
-
-  console.log("chunk score: ", score + " - ", chunk.filePath);
 
   return score;
 }
@@ -135,6 +118,21 @@ function pickTopFiles(
     .map((item) => item.file);
 }
 
+function pickTopKeywordChunks(
+  question: string,
+  chunks: FileChunk[],
+  limit = 40,
+): FileChunk[] {
+  return [...chunks]
+    .map((chunk) => ({
+      chunk,
+      score: scoreChunkKeyword(question, chunk),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item) => item.chunk);
+}
+
 /**
  * Group chunks by file path
  *
@@ -158,39 +156,85 @@ function buildChunkLookup(chunks: FileChunk[]): Map<string, FileChunk[]> {
   return map;
 }
 
-/**
- * Select best chunks AND include neighbors
- *
- * Why neighbors matter:
- * - Code often spans multiple chunks
- * - Without neighbors, context gets cut off
- */
-function pickTopChunksWithNeighbors(
+function normalizeScores(values: number[]): number[] {
+  if (values.length === 0) return [];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  if (min === max) return values.map(() => 1);
+
+  return values.map((v) => (v - min) / (max - min));
+}
+
+async function pickHybridTopChunks(
   question: string,
   chunks: FileChunk[],
-  topChunkLimit = 12,
-): FileChunk[] {
-  // Score all chunks
-  const scored = [...chunks]
-    .map((chunk) => ({
-      chunk,
-      score: scoreChunk(question, chunk),
-    }))
-    .sort((a, b) => b.score - a.score);
+  candidateLimit = 40,
+  finalTopChunkLimit = 10,
+): Promise<FileChunk[]> {
+  // First: cheap keyword filtering to reduce embedding load
+  const candidateChunks = pickTopKeywordChunks(
+    question,
+    chunks,
+    candidateLimit,
+  );
 
-  // Take top chunks
-  const topChunks = scored.slice(0, topChunkLimit).map((item) => item.chunk);
+  // Only embed the candidate set, not every chunk
+  const embeddedChunks = await embedChunks(candidateChunks);
+  const queryEmbedding = await embedQuery(question);
+
+  const keywordScores = embeddedChunks.map((chunk) =>
+    scoreChunkKeyword(question, chunk),
+  );
+
+  const semanticScores = embeddedChunks.map((chunk) =>
+    cosineSimilarity(queryEmbedding, chunk.embedding),
+  );
+
+  const normalizedKeyword = normalizeScores(keywordScores);
+  const normalizedSemantic = normalizeScores(semanticScores);
+
+  if (
+    normalizedKeyword.length !== normalizedSemantic.length ||
+    normalizedKeyword.length !== embeddedChunks.length
+  ) {
+    throw new Error("Hybrid score array length mismatch");
+  }
+
+  const ranked = embeddedChunks
+    .map((chunk, index) => {
+      const k = normalizedKeyword[index];
+      const s = normalizedSemantic[index];
+
+      if (k === undefined || s === undefined) {
+        throw new Error(`Missing score at index ${index}`);
+      }
+
+      const hybridScore = k * 0.45 + s * 0.55;
+
+      return {
+        chunk,
+        keywordScore: keywordScores[index],
+        semanticScore: semanticScores[index],
+        hybridScore,
+      };
+    })
+    .sort((a, b) => b.hybridScore - a.hybridScore);
+
+  const topChunks = ranked
+    .slice(0, finalTopChunkLimit)
+    .map((item) => item.chunk);
+
+  // Build lookup from ALL original chunks so neighbor retrieval still works
   const chunkLookup = buildChunkLookup(chunks);
 
-  // Use Map to dedupe chunks
   const selected = new Map<string, FileChunk>();
 
   for (const chunk of topChunks) {
     selected.set(chunk.chunkId, chunk);
 
-    // Get neighboring chunks
     const siblings = chunkLookup.get(chunk.filePath) ?? [];
-
     const prev = siblings.find((c) => c.chunkIndex === chunk.chunkIndex - 1);
     const next = siblings.find((c) => c.chunkIndex === chunk.chunkIndex + 1);
 
@@ -198,7 +242,6 @@ function pickTopChunksWithNeighbors(
     if (next) selected.set(next.chunkId, next);
   }
 
-  // Sort nicely for readability
   return [...selected.values()].sort((a, b) => {
     if (a.filePath === b.filePath) {
       return a.chunkIndex - b.chunkIndex;
@@ -207,11 +250,6 @@ function pickTopChunksWithNeighbors(
   });
 }
 
-/**
- * Format chunks into a single string
- *
- * This becomes the CONTEXT sent to the LLM
- */
 function formatContext(chunks: FileChunk[]): string {
   return chunks
     .map(
@@ -221,30 +259,20 @@ function formatContext(chunks: FileChunk[]): string {
     .join("\n\n---\n\n");
 }
 
-/**
- * MAIN ENTRY: ask a question about a codebase
- */
 export async function askCodebase(question: string, files: RepoFile[]) {
-  // Step 1: pick relevant files
-  const topFiles = pickTopFiles(question, files, 8);
-
-  // Step 2: chunk only those files (not entire repo)
+  const topFiles = pickTopFiles(question, files, 10);
   const chunks = chunkFiles(topFiles, 3000, 300);
 
-  // Step 3: pick best chunks + neighbors
-  const selectedChunks = pickTopChunksWithNeighbors(question, chunks, 12);
-
-  // Step 4: build context string
+  const selectedChunks = await pickHybridTopChunks(question, chunks, 10);
   const context = formatContext(selectedChunks);
 
-  // Step 5: call LLM
   const response = await client.responses.create({
-    model: "gpt-4.1",
+    model: "gpt-5.4-mini",
     input: [
       {
         role: "system",
         content:
-          "You are a codebase intelligence assistant. Answer only using the provided repository context. Be specific and mention file paths when possible.",
+          "You are a codebase intelligence assistant. Answer only using the provided repository context. Be specific and mention file paths when possible. If uncertain, say what is missing.",
       },
       {
         role: "user",

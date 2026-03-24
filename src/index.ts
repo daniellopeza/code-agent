@@ -20,7 +20,7 @@ async function main() {
   const files = loadFilesRecursive(repoPath);
 
   console.log(`Loaded ${files.length} files`);
-  console.log(`Thinking...\n`);
+  console.log(`Running hybrid retrieval...\n`);
 
   // Step 2: ask AI using retrieval pipeline
   const result = await askCodebase(question, files);
@@ -35,6 +35,7 @@ async function main() {
   /**
    * Final answer from LLM
    */
+  console.log("Response: ");
   console.log(result.answer);
 }
 
