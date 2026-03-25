@@ -10,6 +10,14 @@ import { askCodebase } from "./ask.js";
  *
  * Example:
  * npx tsx src/index.ts ../my-repo "Where is authentication handled?"
+ *
+ * Con:
+ * single entry point when running command. If you want new behavior,
+ * such as ask, plan, etc. you'd likely keep adding if statements to index.ts
+ * or create separate scripts.
+ *
+ * Easier expansion: Commander handles commands in cli.ts
+ * npm run cli -- ask ../my-repo "question"
  */
 async function main() {
   const repoPath = process.argv[2];

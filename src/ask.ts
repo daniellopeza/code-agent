@@ -5,6 +5,8 @@ import { chunkFiles } from "./chunkFiles.js";
 import type { FileChunk } from "./chunkFiles.js";
 import { embedChunks, embedQuery, cosineSimilarity } from "./embeddings.js";
 
+// OpenAI client used for the final answer-generation step.
+// Embeddings are handled in embeddings.ts.
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
