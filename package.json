@@ -11,10 +11,6 @@
   "bin": {
     "code-agent": "./dist/cli.js"
   },
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",

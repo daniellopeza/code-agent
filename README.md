@@ -127,8 +127,8 @@ npm run cli -- plan /path/to/repo "Add support for exporting results as JSON"
 uses:
 
 1. compiled JS
-2. global command
-3. real-world behavior
+2. global command (works outside project folder)
+3. real-world behavior of how real CLI tools are shipped
 
 ```bash
 npm run build
