@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { FileChunk } from "./chunkFiles.js";
+import { loadEmbeddingCache, saveEmbeddingCache, hashText } from "./cache.js";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -110,26 +111,82 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 export async function embedChunks(
   chunks: FileChunk[],
 ): Promise<ChunkWithEmbedding[]> {
-  const texts = chunks.map((chunk) => `FILE: ${chunk.filePath}\n${chunk.text}`);
+  const cache = loadEmbeddingCache();
 
-  const embeddings = await embedTexts(texts);
+  const results: ChunkWithEmbedding[] = [];
+  const chunksToEmbed: FileChunk[] = [];
 
-  if (embeddings.length !== chunks.length) {
-    throw new Error(
-      `Embedding mismatch: ${embeddings.length} vs ${chunks.length}`,
-    );
+  // First pass:
+  // - reuse cached embeddings when possible
+  // - collect only missing/changed chunks for fresh embedding
+  for (const chunk of chunks) {
+    const textHash = hashText(chunk.text);
+    const cached = cache.chunks[chunk.chunkId];
+
+    if (cached && cached.textHash === textHash) {
+      results.push({
+        ...chunk,
+        embedding: cached.embedding,
+      });
+    } else {
+      chunksToEmbed.push(chunk);
+    }
   }
 
-  return chunks.map((chunk, index) => {
-    const embedding = embeddings[index];
-    if (!embedding) {
-      throw new Error(`Missing embedding for chunk ${index}`);
+  // Embed only the chunks that were not reusable from cache
+  //console.log("Chunks to embed: ", chunksToEmbed.length);
+
+  if (chunksToEmbed.length > 0) {
+    const textsToEmbed = chunksToEmbed.map(
+      (chunk) => `FILE: ${chunk.filePath}\n${chunk.text}`,
+    );
+
+    const newEmbeddings = await embedTexts(textsToEmbed);
+
+    if (newEmbeddings.length !== chunksToEmbed.length) {
+      throw new Error(
+        `Embedding mismatch: got ${newEmbeddings.length}, expected ${chunksToEmbed.length}`,
+      );
     }
 
-    return {
-      ...chunk,
-      embedding,
-    };
+    for (let i = 0; i < chunksToEmbed.length; i++) {
+      const chunk = chunksToEmbed[i];
+      const embedding = newEmbeddings[i];
+
+      if (!chunk || !embedding) {
+        throw new Error(`Missing chunk or embedding at index ${i}`);
+      }
+
+      const textHash = hashText(chunk.text);
+
+      // Update cache
+      cache.chunks[chunk.chunkId] = {
+        chunkId: chunk.chunkId,
+        filePath: chunk.filePath,
+        chunkIndex: chunk.chunkIndex,
+        textHash,
+        embedding,
+      };
+
+      // Add to final results
+      results.push({
+        ...chunk,
+        embedding,
+      });
+    }
+
+    saveEmbeddingCache(cache);
+  }
+
+  // Preserve original chunk order
+  const resultMap = new Map(results.map((item) => [item.chunkId, item]));
+
+  return chunks.map((chunk) => {
+    const result = resultMap.get(chunk.chunkId);
+    if (!result) {
+      throw new Error(`Missing embedded result for chunk ${chunk.chunkId}`);
+    }
+    return result;
   });
 }
 
