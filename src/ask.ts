@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-
+import { pickTopFiles } from "./retrieval/fileRanking.js";
 import type { RepoFile } from "./loadFiles.js";
 import { chunkFiles } from "./chunkFiles.js";
 import type { FileChunk } from "./chunkFiles.js";
@@ -11,6 +11,12 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+export type AskCodebaseResult = {
+  answer: string;
+  selectedChunks: FileChunk[];
+  topFiles: RepoFile[];
+};
+
 /**
  * Split text into normalized tokens  (words) for simple keyword matching.
  *
@@ -18,6 +24,7 @@ const client = new OpenAI({
  * We want a cheap first-pass relevance check before using embeddings.
  */
 function tokenize(text: string): string[] {
+  console.log("tokenize: ", text);
   return text
     .toLowerCase()
     .replace(/[^a-z0-9_./-]/g, " ")
@@ -36,74 +43,29 @@ function uniqueTokens(text: string): string[] {
 }
 
 /**
- * Score an entire file against the user question.
- *
- * This is the first retrieval stage.
- * We use file path + the beginning of the file content as cheap signals.
- *
- * Why:
- * We do NOT want to chunk and embed the whole repo immediately.
- * First we narrow down to the most likely files.
- */
-function scoreFile(question: string, file: RepoFile): number {
-  const qTokens = uniqueTokens(question);
-  const filePath = file.path.toLowerCase();
-  const contentStart = file.content.slice(0, 8000).toLowerCase();
-
-  let score = 0;
-
-  for (const token of qTokens) {
-    if (token.length < 2) continue;
-
-    // Strong signal: filename match
-    if (filePath.includes(token)) score += 10;
-
-    // Weaker signal: content match
-    if (contentStart.includes(token)) score += 3;
-  }
-
-  // Small domain-specific boost for common auth-related questions.
-  // This is a heuristic, not a general semantic understanding system.
-  if (question.toLowerCase().includes("auth")) {
-    if (
-      filePath.includes("auth") ||
-      contentStart.includes("login") ||
-      contentStart.includes("token") ||
-      contentStart.includes("jwt") ||
-      contentStart.includes("oauth")
-    ) {
-      score += 15;
-    }
-  }
-
-  return score;
-}
-
-/**
  * Score a chunk using keyword matching only.
  *
  * This is cheaper than embeddings and is used to create
  * a candidate set before semantic reranking.
  */
-function scoreChunkKeyword(question: string, chunk: FileChunk): number {
-  const qTokens = uniqueTokens(question);
-  const filePath = chunk.filePath.toLowerCase();
-  const text = chunk.text.toLowerCase();
+function scoreChunkKeywordFromTokens(
+  questionTokens: string[],
+  questionLower: string,
+  chunk: FileChunk,
+): number {
+  const filePath = String(chunk.filePath ?? "").toLowerCase();
+  const text = String(chunk.text ?? "").toLowerCase();
 
   let score = 0;
 
-  for (const token of qTokens) {
+  for (const token of questionTokens) {
     if (token.length < 2) continue;
 
-    // File path still matters because filenames often reveal intent.
     if (filePath.includes(token)) score += 8;
-
-    // Chunk content match is the main keyword signal here.
     if (text.includes(token)) score += 4;
   }
 
-  // Same heuristic auth boost as file-level scoring.
-  if (question.toLowerCase().includes("auth")) {
+  if (questionLower.includes("auth")) {
     if (
       filePath.includes("auth") ||
       text.includes("login") ||
@@ -119,27 +81,6 @@ function scoreChunkKeyword(question: string, chunk: FileChunk): number {
 }
 
 /**
- * Pick the most relevant files before chunking.
- *
- * Why:
- * This gives us broad repo coverage without sending everything downstream.
- */
-function pickTopFiles(
-  question: string,
-  files: RepoFile[],
-  limit = 10,
-): RepoFile[] {
-  return [...files]
-    .map((file) => ({
-      file,
-      score: scoreFile(question, file),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((item) => item.file);
-}
-
-/**
  * Cheap keyword-only chunk filtering.
  *
  * Why:
@@ -151,10 +92,13 @@ function pickTopKeywordChunks(
   chunks: FileChunk[],
   limit = 40,
 ): FileChunk[] {
+  const qTokens = uniqueTokens(question);
+  const questionLower = question.toLowerCase();
+
   return [...chunks]
     .map((chunk) => ({
       chunk,
-      score: scoreChunkKeyword(question, chunk),
+      score: scoreChunkKeywordFromTokens(qTokens, questionLower, chunk),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
@@ -188,7 +132,6 @@ function buildChunkLookup(chunks: FileChunk[]): Map<string, FileChunk[]> {
     map.set(chunk.filePath, arr);
   }
 
-  // Ensure neighbor lookup works in chunk order.
   for (const arr of map.values()) {
     arr.sort((a, b) => a.chunkIndex - b.chunkIndex);
   }
@@ -230,14 +173,21 @@ async function pickHybridTopChunks(
   );
 
   // Step 2: embed only the candidate chunks, not the full chunk set.
+  if (candidateChunks.length === 0) {
+    return [];
+  }
+
   const embeddedChunks = await embedChunks(candidateChunks);
 
   // Step 3: embed the user question once.
   const queryEmbedding = await embedQuery(question);
 
   // Step 4: compute both keyword scores and semantic similarity scores.
+  const qTokens = uniqueTokens(question);
+  const questionLower = question.toLowerCase();
+
   const keywordScores = embeddedChunks.map((chunk) =>
-    scoreChunkKeyword(question, chunk),
+    scoreChunkKeywordFromTokens(qTokens, questionLower, chunk),
   );
 
   const semanticScores = embeddedChunks.map((chunk) =>
@@ -332,7 +282,10 @@ function formatContext(chunks: FileChunk[]): string {
  * 4. Build final context
  * 5. Ask the LLM for an answer grounded in that context
  */
-export async function askCodebase(question: string, files: RepoFile[]) {
+export async function askCodebase(
+  files: RepoFile[],
+  question: string,
+): Promise<AskCodebaseResult> {
   // Broad file-level filtering first.
   const topFiles = pickTopFiles(question, files, 10);
 
@@ -343,9 +296,13 @@ export async function askCodebase(question: string, files: RepoFile[]) {
   const selectedChunks = await pickHybridTopChunks(question, chunks, 40, 10);
 
   // Convert selected chunks into final text context for the model.
-  const context = formatContext(selectedChunks);
+  const context =
+    selectedChunks.length > 0
+      ? formatContext(selectedChunks)
+      : topFiles
+          .map((file) => `FILE: ${file.path}\n${file.content.slice(0, 4000)}`)
+          .join("\n\n---\n\n");
 
-  // Final answer-generation step.
   const response = await client.responses.create({
     model: "gpt-5.4-mini",
     input: [
