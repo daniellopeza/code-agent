@@ -284,16 +284,23 @@ function formatContext(chunks: FileChunk[]): string {
  */
 export async function askCodebase(
   files: RepoFile[],
-  question: string,
+  retrievalQuestion: string,
+  answerQuestion?: string,
 ): Promise<AskCodebaseResult> {
   // Broad file-level filtering first.
-  const topFiles = pickTopFiles(question, files, 10);
+  const topFiles = pickTopFiles(retrievalQuestion, files, 10);
 
+  // console.log("top files: ", topFiles);
   // Chunk only the most relevant files.
   const chunks = chunkFiles(topFiles, 3000, 250);
 
   // Hybrid retrieval over the chunk set.
-  const selectedChunks = await pickHybridTopChunks(question, chunks, 40, 10);
+  const selectedChunks = await pickHybridTopChunks(
+    retrievalQuestion,
+    chunks,
+    40,
+    10,
+  );
 
   // Convert selected chunks into final text context for the model.
   const context =
@@ -313,7 +320,7 @@ export async function askCodebase(
       },
       {
         role: "user",
-        content: `Question: ${question}\n\nRepository context:\n${context}`,
+        content: `Question: ${answerQuestion || retrievalQuestion}\n\nRepository context:\n${context}`,
       },
     ],
   });

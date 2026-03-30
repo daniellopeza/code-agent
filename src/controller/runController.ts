@@ -26,6 +26,7 @@ export async function runController(input: ControllerInput) {
   const maxIterations = 5;
 
   while (!state.done && state.iteration < maxIterations) {
+    console.log("starting iteration: ", state.iteration);
     state.iteration += 1;
 
     const action = decideNextStep(state);
@@ -49,7 +50,15 @@ export async function runController(input: ControllerInput) {
 
         const matches = searchFilesTool(state.repoFiles, action.query);
 
+        if (matches.length == 0) {
+          console.log("NO MATCHES");
+          break;
+        }
+
         state.relevantFiles = matches;
+        matches.forEach((m) => {
+          console.log("relevant files: ", m.path);
+        });
 
         state.notes.push(
           `Found ${matches.length} potentially relevant files for query "${action.query}".`,
@@ -70,6 +79,8 @@ export async function runController(input: ControllerInput) {
       }
     }
   }
+
+  console.log("While done. ");
 
   if (!state.finalAnswer) {
     state.finalAnswer = "I could not generate a final answer.";

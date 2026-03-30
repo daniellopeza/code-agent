@@ -18,5 +18,5 @@ export async function answerTool(
     ${state.notes.map((n) => `- ${n}`).join("\n")}
     `.trim();
 
-  return await askCodebase(filesToUse, enrichedQuestion);
+  return await askCodebase(filesToUse, state.userGoal, enrichedQuestion);
 }
