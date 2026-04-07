@@ -6,7 +6,7 @@ import type {
 import { decideNextStep } from "./decideNextStep.js";
 import { loadRepoTool } from "../tools/loadRepoTool.js";
 import { searchFilesTool } from "../tools/searchFilesTool.js";
-import { readFileTool } from "../tools/readFileTool.js";
+// import { readFileTool } from "../tools/readFileTool.js";
 import { answerTool } from "../tools/answerTool.js";
 
 export async function runController(input: ControllerInput) {
@@ -40,24 +40,26 @@ export async function runController(input: ControllerInput) {
       case "load_repo": {
         console.log("load-repo");
         state.repoFiles = loadRepoTool(state.repoPath);
-        console.log("load-repo2");
+        console.log("loaded repo.. ");
         state.notes.push(`Loaded ${state.repoFiles.length} repo files.`);
         break;
       }
 
       case "search_files": {
-        console.log("search-files query: ", action.query);
+        console.log("search-files - query:", action.query);
 
         const matches = searchFilesTool(state.repoFiles, action.query);
 
-        if (matches.length == 0) {
-          console.log("NO MATCHES");
+        if (matches.length === 0) {
+          console.log("No matching files found.");
           break;
         }
 
         state.relevantFiles = matches;
-        matches.forEach((m) => {
-          console.log("relevant files: ", m.path);
+
+        console.log(`Found ${matches.length} relevant files:`);
+        matches.forEach((m, index) => {
+          console.log(`${index + 1}. ${m.path}`);
         });
 
         state.notes.push(
