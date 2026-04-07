@@ -1,5 +1,5 @@
 import path from "path";
-import type { RepoFile } from "../loadFiles.js";
+import type { RepoFile, ScoredRepoFile } from "../loadFiles.js";
 
 type ScoredFile = {
   file: RepoFile;
@@ -263,8 +263,8 @@ export function pickTopFiles(
   question: string,
   files: RepoFile[],
   limit = 10,
-): RepoFile[] {
-  const scored: ScoredFile[] = files.map((file) => ({
+): ScoredRepoFile[] {
+  const scored: ScoredRepoFile[] = files.map((file) => ({
     file,
     score: scoreFile(question, file),
   }));
@@ -272,6 +272,5 @@ export function pickTopFiles(
   return scored
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((item) => item.file);
+    .slice(0, limit);
 }

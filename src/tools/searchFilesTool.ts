@@ -1,6 +1,9 @@
-import type { RepoFile } from "../loadFiles.js";
+import type { RepoFile, ScoredRepoFile } from "../loadFiles.js";
 import { pickTopFiles } from "../retrieval/fileRanking.js";
 
-export function searchFilesTool(files: RepoFile[], query: string): RepoFile[] {
+export function searchFilesTool(
+  files: RepoFile[],
+  query: string,
+): ScoredRepoFile[] {
   return pickTopFiles(query, files, 10);
 }

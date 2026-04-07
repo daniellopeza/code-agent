@@ -288,7 +288,8 @@ export async function askCodebase(
   answerQuestion?: string,
 ): Promise<AskCodebaseResult> {
   // Broad file-level filtering first.
-  const topFiles = pickTopFiles(retrievalQuestion, files, 10);
+  const scoredFiles = pickTopFiles(retrievalQuestion, files, 10);
+  const topFiles = scoredFiles.map((scored) => scored.file);
 
   // console.log("top files: ", topFiles);
   // Chunk only the most relevant files.

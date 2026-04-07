@@ -28,6 +28,11 @@ export type RepoFile = {
   content: string;
 };
 
+ export type ScoredRepoFile = {
+  file: RepoFile;
+  score: number;
+};
+
 export function loadFilesRecursive(rootDir: string): RepoFile[] {
   const results: RepoFile[] = [];
 

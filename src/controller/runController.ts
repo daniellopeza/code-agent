@@ -55,11 +55,11 @@ export async function runController(input: ControllerInput) {
           break;
         }
 
-        state.relevantFiles = matches;
+        state.relevantFiles = matches.map((m) => m.file);
 
         console.log(`Found ${matches.length} relevant files:`);
         matches.forEach((m, index) => {
-          console.log(`${index + 1}. ${m.path}`);
+          console.log(`${index + 1}. [score=${m.score}] ${m.file.path}`);
         });
 
         state.notes.push(
