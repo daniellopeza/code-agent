@@ -1,5 +1,6 @@
 import path from "path";
 import type { RepoFile, ScoredRepoFile } from "../loadFiles.js";
+import { embedFiles, embedQuery, cosineSimilarity } from "../embeddings.js";
 
 type ScoredFile = {
   file: RepoFile;
@@ -273,4 +274,53 @@ export function pickTopFiles(
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
+
+export async function hybridPickTopFiles(
+  question: string,
+  files: RepoFile[],
+  limit = 10,
+  lexicalCandidates = 30,
+): Promise<ScoredRepoFile[]> {
+  // Phase 1: Lexical narrowing
+  console.log("Starting lexical ranking...");
+  const lexicalTop = pickTopFiles(question, files, lexicalCandidates);
+  if (lexicalTop.length === 0) return [];
+
+  // Phase 2: Semantic reranking
+  console.log("Embedding candidate files...");
+  const candidateFiles = lexicalTop.map((s) => s.file);
+  console.log("Embedding files...");
+  const embeddedFiles = await embedFiles(candidateFiles);
+  console.log("Embedding query...");
+  const queryEmbedding = await embedQuery(question);
+
+  // Compute semantic scores
+  console.log("Computing semantic similarity...");
+  const semanticScores: number[] = embeddedFiles.map((file) =>
+    cosineSimilarity(queryEmbedding, file.embedding),
+  );
+
+  // Normalize scores
+  const lexicalScores = lexicalTop.map((s) => s.score);
+  const maxLexical = Math.max(...lexicalScores);
+  const normalizedLexical = lexicalScores.map((s) =>
+    maxLexical > 0 ? s / maxLexical : 0,
+  );
+  const normalizedSemantic = semanticScores.map((s) => (s + 1) / 2); // [-1,1] to [0,1]
+
+  // Combine scores: 70% lexical, 30% semantic
+  const combinedScores: number[] = normalizedLexical.map(
+    (lex, i) => 0.7 * lex + 0.3 * (normalizedSemantic[i] ?? 0),
+  );
+
+  // Create final scored results
+  const finalScored: ScoredRepoFile[] = lexicalTop.map((item, i) => ({
+    file: item.file,
+    score: combinedScores[i] ?? 0,
+  }));
+
+  // Sort by combined score and take top limit
+  console.log("Sorting final results...");
+  return finalScored.sort((a, b) => b.score - a.score).slice(0, limit);
 }

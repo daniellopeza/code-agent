@@ -28,9 +28,13 @@ export type RepoFile = {
   content: string;
 };
 
- export type ScoredRepoFile = {
+export type ScoredRepoFile = {
   file: RepoFile;
   score: number;
+};
+
+export type FileWithEmbedding = RepoFile & {
+  embedding: number[];
 };
 
 export function loadFilesRecursive(rootDir: string): RepoFile[] {

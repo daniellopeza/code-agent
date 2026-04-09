@@ -38,9 +38,9 @@ export async function runController(input: ControllerInput) {
 
     switch (action.type) {
       case "load_repo": {
-        console.log("load-repo");
+        console.log("loading repo from path: ", state.repoPath);
         state.repoFiles = loadRepoTool(state.repoPath);
-        console.log("loaded repo.. ");
+        console.log("loaded repo. Number of files: ", state.repoFiles.length);
         state.notes.push(`Loaded ${state.repoFiles.length} repo files.`);
         break;
       }
@@ -48,7 +48,7 @@ export async function runController(input: ControllerInput) {
       case "search_files": {
         console.log("search-files - query:", action.query);
 
-        const matches = searchFilesTool(state.repoFiles, action.query);
+        const matches = await searchFilesTool(state.repoFiles, action.query);
 
         if (matches.length === 0) {
           console.log("No matching files found.");
