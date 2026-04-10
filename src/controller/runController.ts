@@ -6,7 +6,7 @@ import type {
 import { decideNextStep } from "./decideNextStep.js";
 import { loadRepoTool } from "../tools/loadRepoTool.js";
 import { searchFilesTool } from "../tools/searchFilesTool.js";
-// import { readFileTool } from "../tools/readFileTool.js";
+import { summarizeFileTool } from "../tools/readFileTool.js";
 import { answerTool } from "../tools/answerTool.js";
 
 export async function runController(input: ControllerInput) {
@@ -17,13 +17,14 @@ export async function runController(input: ControllerInput) {
 
     repoFiles: [],
     relevantFiles: [],
+    filesRead: [],
     notes: [],
     steps: [],
     iteration: 0,
     done: false,
   };
 
-  const maxIterations = 5;
+  const maxIterations = 20;
 
   while (!state.done && state.iteration < maxIterations) {
     console.log("starting iteration: ", state.iteration);
@@ -45,6 +46,9 @@ export async function runController(input: ControllerInput) {
         break;
       }
 
+      // TODO: add a multi-step controller loop that can iteratively search, read, and synthesize evidence before answering
+
+      // find relevant files in the repo
       case "search_files": {
         console.log("search-files - query:", action.query);
 
@@ -69,9 +73,28 @@ export async function runController(input: ControllerInput) {
         break;
       }
 
+      // read a specific file and extract a summary
+      case "summarize_file": {
+        console.log("summarize_file - path:", action.path);
+
+        const file = state.repoFiles.find((f) => f.path === action.path);
+        if (!file) {
+          console.log("File not found in repoFiles.");
+          break;
+        }
+
+        const summary = await summarizeFileTool(file);
+        const note = `Summary for ${file.path}: ${summary.replace(/\n+/g, " ").slice(0, 400)}`;
+
+        state.notes.push(note);
+        state.filesRead.push({ file, summary });
+
+        console.log(`Summarized file: ${file.path}`);
+        break;
+      }
+
       case "answer": {
-        // console.log("answer state: ", state);
-        console.log("answer");
+        console.log("answer state: ", state);
         const result = await answerTool(state);
         state.finalResult = result;
         state.finalAnswer = result.answer;
@@ -97,8 +120,8 @@ function describeAction(action: ControllerAction): string {
       return "Load repository";
     case "search_files":
       return `Search files for: ${action.query}`;
-    case "read_file":
-      return `Read file: ${action.path}`;
+    case "summarize_file":
+      return `Summarize file: ${action.path}`;
     case "answer":
       return "Generate final answer";
   }

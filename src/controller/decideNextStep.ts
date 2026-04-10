@@ -11,6 +11,20 @@ export function decideNextStep(state: ControllerState): ControllerAction {
     return { type: "search_files", query: state.userGoal };
   }
 
+  // For analyze mode, summarize top relevant files before answering.
+  if (state.mode === "analyze") {
+    const maxFilesToSummarize = 3;
+    if (state.filesRead.length < maxFilesToSummarize) {
+      const nextFile = state.relevantFiles.find(
+        (file) => !state.filesRead.some((item) => item.file.path === file.path),
+      );
+      if (nextFile) {
+        console.log(`Summarizing next file: ${nextFile.path}`);
+        return { type: "summarize_file", path: nextFile.path };
+      }
+    }
+  }
+
   console.log("Files present. Answering.. ");
   return { type: "answer" };
 }

@@ -6,7 +6,11 @@ export async function answerTool(
   state: ControllerState,
 ): Promise<AskCodebaseResult> {
   const filesToUse =
-    state.relevantFiles.length > 0 ? state.relevantFiles : state.repoFiles;
+    state.mode === "analyze" && state.filesRead.length > 0
+      ? state.filesRead.map((item) => item.file)
+      : state.relevantFiles.length > 0
+        ? state.relevantFiles
+        : state.repoFiles;
 
   console.log("answerTool()");
   const enrichedQuestion = `

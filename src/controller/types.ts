@@ -1,13 +1,18 @@
 import type { RepoFile } from "../loadFiles.js";
 import type { AskCodebaseResult } from "../ask.js";
 
-export type AgentMode = "ask" | "explain" | "plan";
+export type AgentMode = "ask" | "analyze" | "explain" | "plan";
 
 export type ControllerInput = {
   repoPath: string;
   userGoal: string;
   mode: AgentMode;
   verbose?: boolean;
+};
+
+export type FileSummary = {
+  file: RepoFile;
+  summary: string;
 };
 
 export type ControllerState = {
@@ -17,6 +22,7 @@ export type ControllerState = {
 
   repoFiles: RepoFile[];
   relevantFiles: RepoFile[];
+  filesRead: FileSummary[];
   notes: string[];
 
   steps: string[];
@@ -30,5 +36,5 @@ export type ControllerState = {
 export type ControllerAction =
   | { type: "load_repo" }
   | { type: "search_files"; query: string }
-  | { type: "read_file"; path: string }
+  | { type: "summarize_file"; path: string }
   | { type: "answer" };
