@@ -8,6 +8,7 @@ import { loadRepoTool } from "../tools/loadRepoTool.js";
 import { searchFilesTool } from "../tools/searchFilesTool.js";
 import { summarizeFileTool } from "../tools/readFileTool.js";
 import { answerTool } from "../tools/answerTool.js";
+import { decomposeQuery } from "../tools/decomposeQueryTool.js";
 
 export async function runController(input: ControllerInput) {
   const state: ControllerState = {
@@ -19,6 +20,9 @@ export async function runController(input: ControllerInput) {
     relevantFiles: [],
     filesRead: [],
     notes: [],
+    subQuestions: [],
+    currentSubQuestionId: undefined,
+    filesBySubQuestion: new Map(),
     steps: [],
     iteration: 0,
     done: false,
@@ -46,6 +50,23 @@ export async function runController(input: ControllerInput) {
         break;
       }
 
+      case "decompose_query": {
+        console.log("decompose_query - breaking down user goal");
+        const subQuestions = await decomposeQuery(state.userGoal);
+        state.subQuestions = subQuestions;
+        state.currentSubQuestionId = subQuestions[0]?.id;
+
+        console.log(`Decomposed into ${subQuestions.length} sub-questions:`);
+        subQuestions.forEach((sq, i) => {
+          console.log(`  ${i + 1}. ${sq.question}`);
+        });
+
+        state.notes.push(
+          `Decomposed user goal into ${subQuestions.length} sub-questions for targeted analysis.`,
+        );
+        break;
+      }
+
       // TODO: add a multi-step controller loop that can iteratively search, read, and synthesize evidence before answering
 
       // find relevant files in the repo
@@ -59,16 +80,39 @@ export async function runController(input: ControllerInput) {
           break;
         }
 
-        state.relevantFiles = matches.map((m) => m.file);
+        const files = matches.map((m) => m.file);
 
-        console.log(`Found ${matches.length} relevant files:`);
+        // Store files for current sub-question
+        if (state.currentSubQuestionId) {
+          state.filesBySubQuestion.set(state.currentSubQuestionId, files);
+        }
+
+        // Merge all files from all sub-questions for display
+        const allFiles = Array.from(state.filesBySubQuestion.values()).flat();
+        state.relevantFiles = allFiles.filter(
+          (f, i, arr) => arr.findIndex((x) => x.path === f.path) === i,
+        );
+
+        console.log(
+          `Found ${matches.length} relevant files for this sub-question:`,
+        );
         matches.forEach((m, index) => {
           console.log(`${index + 1}. [score=${m.score}] ${m.file.path}`);
         });
 
         state.notes.push(
-          `Found ${matches.length} potentially relevant files for query "${action.query}".`,
+          `[Sub-Q ${state.currentSubQuestionId}] Found ${matches.length} files for: "${action.query}".`,
         );
+
+        // Mark current sub-question as answered
+        if (state.currentSubQuestionId) {
+          const subQ = state.subQuestions.find(
+            (sq) => sq.id === state.currentSubQuestionId,
+          );
+          if (subQ) {
+            subQ.answered = true;
+          }
+        }
 
         break;
       }
@@ -94,7 +138,7 @@ export async function runController(input: ControllerInput) {
       }
 
       case "answer": {
-        console.log("answer state: ", state);
+        // console.log("answer state: ", state);
         const result = await answerTool(state);
         state.finalResult = result;
         state.finalAnswer = result.answer;
@@ -118,6 +162,8 @@ function describeAction(action: ControllerAction): string {
   switch (action.type) {
     case "load_repo":
       return "Load repository";
+    case "decompose_query":
+      return "Decompose question into sub-questions";
     case "search_files":
       return `Search files for: ${action.query}`;
     case "summarize_file":

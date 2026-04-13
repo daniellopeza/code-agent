@@ -1,5 +1,6 @@
 import type { RepoFile } from "../loadFiles.js";
 import type { AskCodebaseResult } from "../ask.js";
+import type { SubQuestion } from "../tools/decomposeQueryTool.js";
 
 export type AgentMode = "ask" | "analyze" | "explain" | "plan";
 
@@ -25,6 +26,10 @@ export type ControllerState = {
   filesRead: FileSummary[];
   notes: string[];
 
+  subQuestions: SubQuestion[];
+  currentSubQuestionId: string | undefined;
+  filesBySubQuestion: Map<string, RepoFile[]>;
+
   steps: string[];
   finalAnswer?: string;
   finalResult?: AskCodebaseResult;
@@ -35,6 +40,7 @@ export type ControllerState = {
 
 export type ControllerAction =
   | { type: "load_repo" }
+  | { type: "decompose_query" }
   | { type: "search_files"; query: string }
   | { type: "summarize_file"; path: string }
   | { type: "answer" };

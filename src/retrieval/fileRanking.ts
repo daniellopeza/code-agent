@@ -282,45 +282,30 @@ export async function hybridPickTopFiles(
   limit = 10,
   lexicalCandidates = 30,
 ): Promise<ScoredRepoFile[]> {
-  // Phase 1: Lexical narrowing
-  console.log("Starting lexical ranking...");
-  const lexicalTop = pickTopFiles(question, files, lexicalCandidates);
-  if (lexicalTop.length === 0) return [];
+  // Step 1: Lexical ranking to narrow candidates
+  const candidates = pickTopFiles(question, files, lexicalCandidates);
+  if (candidates.length === 0) return [];
 
-  // Phase 2: Semantic reranking
-  console.log("Embedding candidate files...");
-  const candidateFiles = lexicalTop.map((s) => s.file);
-  console.log("Embedding files...");
-  const embeddedFiles = await embedFiles(candidateFiles);
-  console.log("Embedding query...");
+  // Step 2: Embed narrowed candidates and query
+  const embeddedCandidates = await embedFiles(candidates.map((c) => c.file));
   const queryEmbedding = await embedQuery(question);
 
-  // Compute semantic scores
-  console.log("Computing semantic similarity...");
-  const semanticScores: number[] = embeddedFiles.map((file) =>
-    cosineSimilarity(queryEmbedding, file.embedding),
-  );
+  // Step 3: Compute both lexical and semantic scores
+  const lexicalScores = candidates.map((c) => c.score);
+  const maxLexical = Math.max(...lexicalScores) || 1;
+  const normalizedLexical = lexicalScores.map((s) => s / maxLexical);
 
-  // Normalize scores
-  const lexicalScores = lexicalTop.map((s) => s.score);
-  const maxLexical = Math.max(...lexicalScores);
-  const normalizedLexical = lexicalScores.map((s) =>
-    maxLexical > 0 ? s / maxLexical : 0,
+  const semanticScores = embeddedCandidates.map((file) =>
+    cosineSimilarity(queryEmbedding, file.embedding),
   );
   const normalizedSemantic = semanticScores.map((s) => (s + 1) / 2); // [-1,1] to [0,1]
 
-  // Combine scores: 70% lexical, 30% semantic
-  const combinedScores: number[] = normalizedLexical.map(
-    (lex, i) => 0.7 * lex + 0.3 * (normalizedSemantic[i] ?? 0),
-  );
-
-  // Create final scored results
-  const finalScored: ScoredRepoFile[] = lexicalTop.map((item, i) => ({
-    file: item.file,
-    score: combinedScores[i] ?? 0,
+  // Step 4: Combine (70% lexical, 30% semantic) and rank
+  const finalResults = candidates.map((candidate, i) => ({
+    file: candidate.file,
+    score:
+      0.7 * (normalizedLexical[i] ?? 0) + 0.3 * (normalizedSemantic[i] ?? 0),
   }));
 
-  // Sort by combined score and take top limit
-  console.log("Sorting final results...");
-  return finalScored.sort((a, b) => b.score - a.score).slice(0, limit);
+  return finalResults.sort((a, b) => b.score - a.score).slice(0, limit);
 }
