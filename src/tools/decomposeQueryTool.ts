@@ -38,8 +38,8 @@ export async function decomposeQuery(userGoal: string): Promise<SubQuestion[]> {
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as Array<{ question: string }>;
-  return parsed.map((item, idx) => ({
-    id: String(idx),
+  return parsed.map((item, index) => ({
+    id: String(index),
     question: item.question,
     answered: false,
   }));
