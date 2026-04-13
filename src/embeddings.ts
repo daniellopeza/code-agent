@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { FileChunk } from "./chunkFiles.js";
+import type { RepoFile, FileWithEmbedding } from "./loadFiles.js";
 import { loadEmbeddingCache, saveEmbeddingCache, hashText } from "./cache.js";
 
 const client = new OpenAI({
@@ -185,6 +186,98 @@ export async function embedChunks(
     const result = resultMap.get(chunk.chunkId);
     if (!result) {
       throw new Error(`Missing embedded result for chunk ${chunk.chunkId}`);
+    }
+    return result;
+  });
+}
+
+/**
+ * Embed a set of files.
+ *
+ * Why:
+ * We want semantic retrieval over file content for hybrid ranking.
+ */
+export async function embedFiles(
+  files: RepoFile[],
+): Promise<FileWithEmbedding[]> {
+  const cache = loadEmbeddingCache();
+
+  const results: FileWithEmbedding[] = [];
+  const filesToEmbed: RepoFile[] = [];
+
+  console.log(`Embedding ${files.length} files...`);
+  // First pass:
+  // - reuse cached embeddings when possible
+  // - collect only missing/changed files for fresh embedding
+  for (const file of files) {
+    console.log("Checking cache for file: ", file.path);
+    const text = `FILE: ${file.path}\n${file.content.slice(0, 12000)}`;
+    const textHash = hashText(text);
+    const cached = cache.files[file.path];
+    if (cached && cached.textHash === textHash) {
+      results.push({
+        ...file,
+        embedding: cached.embedding,
+      });
+    } else {
+      filesToEmbed.push(file);
+    }
+  }
+
+  // Embed only the files that were not reusable from cache
+  if (filesToEmbed.length > 0) {
+    console.log(
+      `Embedding ${filesToEmbed.length} files that were not in cache...`,
+    );
+    const textsToEmbed = filesToEmbed.map(
+      (file) => `FILE: ${file.path}\n${file.content.slice(0, 12000)}`,
+    );
+
+    console.log("Starting embedding of files...");
+    const newEmbeddings = await embedTexts(textsToEmbed);
+
+    if (newEmbeddings.length !== filesToEmbed.length) {
+      throw new Error(
+        `Embedding mismatch: got ${newEmbeddings.length}, expected ${filesToEmbed.length}`,
+      );
+    }
+
+    console.log("Finished embedding files. Updating cache and results...");
+    for (let i = 0; i < filesToEmbed.length; i++) {
+      const file = filesToEmbed[i];
+      const embedding = newEmbeddings[i];
+
+      if (!file || !embedding) {
+        throw new Error(`Missing file or embedding at index ${i}`);
+      }
+
+      const text = `FILE: ${file.path}\n${file.content.slice(0, 12000)}`;
+      const textHash = hashText(text);
+
+      // Update cache
+      cache.files[file.path] = {
+        filePath: file.path,
+        textHash,
+        embedding,
+      };
+
+      // Add to final results
+      results.push({
+        ...file,
+        embedding,
+      });
+    }
+
+    saveEmbeddingCache(cache);
+  }
+
+  // Preserve original file order
+  const resultMap = new Map(results.map((item) => [item.path, item]));
+
+  return files.map((file) => {
+    const result = resultMap.get(file.path);
+    if (!result) {
+      throw new Error(`Missing embedded result for file ${file.path}`);
     }
     return result;
   });

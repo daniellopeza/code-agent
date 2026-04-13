@@ -20,10 +20,20 @@ export type CachedEmbedding = {
 };
 
 /**
+ * Shape of a cached file embedding.
+ */
+export type CachedFileEmbedding = {
+  filePath: string;
+  textHash: string;
+  embedding: number[];
+};
+
+/**
  * Entire cache structure.
  */
 export type EmbeddingCache = {
   chunks: Record<string, CachedEmbedding>; // keyed by chunkId
+  files: Record<string, CachedFileEmbedding>; // keyed by filePath
 };
 
 /**
@@ -42,14 +52,23 @@ function ensureCacheDir() {
 export function loadEmbeddingCache(): EmbeddingCache {
   try {
     if (!fs.existsSync(CACHE_FILE)) {
-      return { chunks: {} };
+      return { chunks: {}, files: {} };
     }
 
     const raw = fs.readFileSync(CACHE_FILE, "utf-8");
-    return JSON.parse(raw) as EmbeddingCache;
+    const parsed = JSON.parse(raw) as Partial<EmbeddingCache> | null;
+
+    return {
+      chunks:
+        parsed?.chunks && typeof parsed.chunks === "object"
+          ? parsed.chunks
+          : {},
+      files:
+        parsed?.files && typeof parsed.files === "object" ? parsed.files : {},
+    };
   } catch (err) {
     console.warn("⚠️ Failed to load cache, starting fresh");
-    return { chunks: {} };
+    return { chunks: {}, files: {} };
   }
 }
 

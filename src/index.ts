@@ -37,7 +37,7 @@ async function main() {
   console.log(`Running hybrid retrieval...\n`);
 
   // Ask the codebase agent to answer the question using retrieved repo context.
-  const result = await askCodebase(question, files);
+  const result = await askCodebase(files, question);
 
   console.log("Top files used:");
   for (const file of result.topFiles) {

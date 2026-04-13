@@ -3,10 +3,10 @@
 import "dotenv/config";
 import { Command } from "commander";
 import fs from "fs";
-
-import { loadFilesRecursive } from "./loadFiles.js";
-import { askCodebase } from "./ask.js";
 import OpenAI from "openai";
+
+import { runController } from "./controller/runController.js";
+import { loadFilesRecursive } from "./loadFiles.js";
 
 const program = new Command();
 
@@ -22,45 +22,100 @@ program
 /**
  * COMMAND: ask
  *
- * Uses the full repo-aware retrieval pipeline:
- * - load repo files
- * - run hybrid retrieval
- * - answer using retrieved context
+ * Now routes through the controller layer.
+ * The controller handles:
+ * - loading the repo
+ * - selecting relevant files
+ * - generating the final answer
  */
 program
   .command("ask")
   .description("Ask a question about a codebase")
   .argument("<repoPath>", "Path to repo")
   .argument("<question...>", "Question to ask")
-  .action(async (repoPath: string, questionParts: string[]) => {
-    const question = questionParts.join(" ");
+  .option("-v, --verbose", "Show controller steps")
+  .action(
+    async (
+      repoPath: string,
+      questionParts: string[],
+      options: { verbose?: boolean },
+    ) => {
+      const question = questionParts.join(" ");
 
-    console.log("[cli] ask command started");
-    console.log(`Loading repo from: ${repoPath}`);
+      console.log("[cli] ask command started");
+      console.log(`Repo path: ${repoPath}`);
+      console.log(`Question: ${question}\n`);
 
-    const files = loadFilesRecursive(repoPath);
+      const result = await runController({
+        repoPath,
+        userGoal: question,
+        mode: "ask",
+        verbose: options.verbose ?? false,
+      });
 
-    console.log(`Loaded ${files.length} files`);
-    console.log("Running hybrid retrieval...\n");
+      if (result.finalResult?.topFiles?.length) {
+        console.log("Top files used:");
+        result.finalResult.topFiles.forEach((file) => {
+          console.log(`- ${file.path}`);
+        });
+        console.log("");
+      }
 
-    const result = await askCodebase(question, files);
+      if (result.finalResult?.selectedChunks) {
+        console.log(
+          `Selected chunks: ${result.finalResult.selectedChunks.length}\n`,
+        );
+      }
 
-    console.log("Top files used:");
-    result.topFiles.forEach((file) => {
-      console.log(`- ${file.path}`);
-    });
+      console.log("Answer:\n");
+      console.log(result.finalAnswer ?? "No answer generated.");
+    },
+  );
 
-    console.log(`\nSelected chunks: ${result.selectedChunks.length}\n`);
+/**
+ * COMMAND: analyze
+ *
+ * Multi-step analysis with evidence gathering.
+ */
+program
+  .command("analyze")
+  .description("Analyze a codebase with multi-step reasoning")
+  .argument("<repoPath>", "Path to repo")
+  .argument("<question...>", "Question to analyze")
+  .option("-v, --verbose", "Show controller steps")
+  .action(
+    async (
+      repoPath: string,
+      questionParts: string[],
+      options: { verbose?: boolean },
+    ) => {
+      const question = questionParts.join(" ");
 
-    console.log("Answer:\n");
-    console.log(result.answer);
-  });
+      console.log("[cli] analyze command started");
+      console.log(`Repo path: ${repoPath}`);
+      console.log(`Question: ${question}\n`);
+
+      const result = await runController({
+        repoPath,
+        userGoal: question,
+        mode: "analyze",
+        verbose: options.verbose ?? false,
+      });
+
+      console.log("Analysis complete.");
+      console.log(`Files read: ${result.filesRead.length}`);
+      console.log(`Notes gathered: ${result.notes.length}`);
+      console.log("");
+
+      console.log("Answer:\n");
+      console.log(result.finalAnswer ?? "No answer generated.");
+    },
+  );
 
 /**
  * COMMAND: explain
  *
  * Explains a single file directly.
- * This is useful for zooming in after broader repo Q&A.
  */
 program
   .command("explain")
@@ -94,12 +149,8 @@ program
 /**
  * COMMAND: plan
  *
- * Current version:
- * - loads repo file list
- * - asks model which files are likely relevant to a requested feature
- *
- * Later, this should be upgraded to use your hybrid retrieval pipeline
- * instead of only sending filenames.
+ * Current version still uses the file list directly.
+ * Later this can also be routed through the controller.
  */
 program
   .command("plan")
