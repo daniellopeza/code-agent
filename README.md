@@ -8,10 +8,10 @@ A TypeScript CLI that loads a repository, retrieves relevant code context using 
 
 ## Features
 
-- **Ask** — Ask questions about a repository and get grounded answers
+- ⭐ **Analyze** — Multi-step reasoning with evidence gathering (agentic-like workflow) — _primary command_
 - **Explain** — Explain a single file in plain English
 - **Plan** — Suggest which files to modify for a feature request
-- **Analyze** — Multi-step reasoning with evidence gathering
+- **Ask** — Legacy command (being deprecated, use `analyze` instead)
 
 ## Requirements
 
@@ -39,8 +39,8 @@ OPENAI_API_KEY=your_openai_api_key_here
 **Development mode** (uses `tsx`, no build required):
 
 ```bash
-# Ask a question about a repo
-npm run cli -- ask /path/to/repo "Where is authentication handled?"
+# ⭐ Primary: Analyze with multi-step reasoning (agentic workflow)
+npm run cli -- analyze /path/to/repo "How does the caching work?"
 
 # Explain a single file
 npm run cli -- explain src/cli.ts
@@ -48,8 +48,8 @@ npm run cli -- explain src/cli.ts
 # Plan a feature change
 npm run cli -- plan /path/to/repo "Add JSON export support"
 
-# Analyze with multi-step reasoning
-npm run cli -- analyze /path/to/repo "How does the caching work?"
+# Legacy: Ask a question (deprecated, use analyze)
+npm run cli -- ask /path/to/repo "Where is authentication handled?"
 ```
 
 **Production mode** (compiled):
@@ -61,12 +61,12 @@ node dist/cli.js ask /path/to/repo "Your question here"
 
 ## Commands
 
-| Command                            | Description                           | Example                                                     |
-| ---------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
-| `ask <repoPath> <question...>`     | Answer a question about a codebase    | `npm run cli -- ask ./my-repo "Where is auth handled?"`     |
-| `explain <filePath>`               | Explain a single file                 | `npm run cli -- explain src/cli.ts`                         |
-| `plan <repoPath> <request...>`     | Suggest files to change for a feature | `npm run cli -- plan ./my-repo "Add user settings"`         |
-| `analyze <repoPath> <question...>` | Multi-step analysis with reasoning    | `npm run cli -- analyze ./my-repo "How does caching work?"` |
+| Command                               | Description                                      | Example                                                     |
+| ------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------- |
+| ⭐ `analyze <repoPath> <question...>` | Multi-step analysis with reasoning (recommended) | `npm run cli -- analyze ./my-repo "How does caching work?"` |
+| `explain <filePath>`                  | Explain a single file                            | `npm run cli -- explain src/cli.ts`                         |
+| `plan <repoPath> <request...>`        | Suggest files to change for a feature            | `npm run cli -- plan ./my-repo "Add user settings"`         |
+| `ask <repoPath> <question...>`        | Legacy (deprecated, use `analyze`)               | `npm run cli -- ask ./my-repo "Where is auth handled?"`     |
 
 ## How It Works
 
