@@ -5,8 +5,8 @@ export function decideNextStep(state: ControllerState): ControllerAction {
     return { type: "load_repo" };
   }
 
-  // In analyze mode, decompose complex questions first
-  if (state.mode === "analyze" && state.subQuestions.length === 0) {
+  // In ask mode, decompose complex questions first
+  if (state.mode === "ask" && state.subQuestions.length === 0) {
     return { type: "decompose_query" };
   }
 
@@ -22,20 +22,25 @@ export function decideNextStep(state: ControllerState): ControllerAction {
 
   // Default: search using the full user goal if no sub-questions
   if (state.relevantFiles.length === 0) {
+    console.log(" SEARCH FILES for MAIN GOAL: ");
     const query =
       state.subQuestions.length === 0 ? state.userGoal : state.userGoal;
     return { type: "search_files", query };
   }
 
-  // For analyze mode, summarize top relevant files before answering
-  if (state.mode === "analyze") {
+  // For ask mode, summarize top relevant files before answering
+  if (state.mode === "ask") {
     const maxFilesToSummarize = 3;
-    if (state.filesRead.length < maxFilesToSummarize) {
-      const nextFile = state.relevantFiles.find(
-        (file) => !state.filesRead.some((item) => item.file.path === file.path),
-      );
+    const sortedFiles = [...state.relevantFiles].sort(
+      (a, b) => b.score - a.score,
+    );
+
+    let index = state.filesRead.length;
+
+    if (index < maxFilesToSummarize && index < sortedFiles.length) {
+      const nextFile = sortedFiles[index];
       if (nextFile) {
-        return { type: "summarize_file", path: nextFile.path };
+        return { type: "summarize_file", path: nextFile.file.path };
       }
     }
   }

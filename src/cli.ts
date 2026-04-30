@@ -20,13 +20,9 @@ program
   .version("1.0.0");
 
 /**
- * COMMAND: ask
+ * COMMAND: analyze
  *
- * Now routes through the controller layer.
- * The controller handles:
- * - loading the repo
- * - selecting relevant files
- * - generating the final answer
+ * Multi-step analysis with evidence gathering.
  */
 program
   .command("ask")
@@ -53,60 +49,14 @@ program
         verbose: options.verbose ?? false,
       });
 
-      if (result.finalResult?.topFiles?.length) {
-        console.log("Top files used:");
-        result.finalResult.topFiles.forEach((file) => {
-          console.log(`- ${file.path}`);
-        });
-        console.log("");
-      }
-
-      if (result.finalResult?.selectedChunks) {
-        console.log(
-          `Selected chunks: ${result.finalResult.selectedChunks.length}\n`,
-        );
-      }
-
-      console.log("Answer:\n");
-      console.log(result.finalAnswer ?? "No answer generated.");
-    },
-  );
-
-/**
- * COMMAND: analyze
- *
- * Multi-step analysis with evidence gathering.
- */
-program
-  .command("analyze")
-  .description("Analyze a codebase with multi-step reasoning")
-  .argument("<repoPath>", "Path to repo")
-  .argument("<question...>", "Question to analyze")
-  .option("-v, --verbose", "Show controller steps")
-  .action(
-    async (
-      repoPath: string,
-      questionParts: string[],
-      options: { verbose?: boolean },
-    ) => {
-      const question = questionParts.join(" ");
-
-      console.log("[cli] analyze command started");
-      console.log(`Repo path: ${repoPath}`);
-      console.log(`Question: ${question}\n`);
-
-      const result = await runController({
-        repoPath,
-        userGoal: question,
-        mode: "analyze",
-        verbose: options.verbose ?? false,
-      });
-
+      console.log("===============================");
       console.log("Analysis complete.");
       console.log(`Files read: ${result.filesRead.length}`);
+      console.log(`Files relevant: ${result.relevantFiles.length}`);
       console.log(`Notes gathered: ${result.notes.length}`);
       console.log("");
 
+      console.log("===============================");
       console.log("Answer:\n");
       console.log(result.finalAnswer ?? "No answer generated.");
     },
