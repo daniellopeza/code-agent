@@ -1,16 +1,23 @@
 import type { ControllerAction, ControllerState } from "./types.js";
+import {
+  getQueryComplexity,
+  isComplexQuery,
+} from "../tools/queryComplexity.js";
 
 export function decideNextStep(state: ControllerState): ControllerAction {
   if (state.repoFiles.length === 0) {
     return { type: "load_repo" };
   }
 
-  // In ask mode, decompose complex questions first
-  if (state.mode === "ask" && state.subQuestions.length === 0) {
+  // In ask mode, only decompose medium/complex questions after loading files.
+  // can we do async or simultaneous??
+  if (state.mode === "ask" && state.iteration === 2) {
+    const complexity = getQueryComplexity(state.userGoal);
+
+    console.log("Query complexity:", complexity);
     return { type: "decompose_query" };
   }
 
-  // If we have sub-questions, search for each one
   if (state.subQuestions.length > 0) {
     const unansweredQuestion = state.subQuestions.find((sq) => !sq.answered);
     if (unansweredQuestion) {
@@ -20,22 +27,18 @@ export function decideNextStep(state: ControllerState): ControllerAction {
     }
   }
 
-  // Default: search using the full user goal if no sub-questions
   if (state.relevantFiles.length === 0) {
     console.log(" SEARCH FILES for MAIN GOAL: ");
-    const query =
-      state.subQuestions.length === 0 ? state.userGoal : state.userGoal;
-    return { type: "search_files", query };
+    return { type: "search_files", query: state.userGoal };
   }
 
-  // For ask mode, summarize top relevant files before answering
   if (state.mode === "ask") {
     const maxFilesToSummarize = 3;
     const sortedFiles = [...state.relevantFiles].sort(
       (a, b) => b.score - a.score,
     );
 
-    let index = state.filesRead.length;
+    const index = state.filesRead.length;
 
     if (index < maxFilesToSummarize && index < sortedFiles.length) {
       const nextFile = sortedFiles[index];
@@ -45,6 +48,5 @@ export function decideNextStep(state: ControllerState): ControllerAction {
     }
   }
 
-  // All evidence gathered, time to synthesize
   return { type: "answer" };
 }
