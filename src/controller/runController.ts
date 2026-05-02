@@ -29,6 +29,8 @@ export async function runController(input: ControllerInput) {
   };
 
   const maxIterations = 20;
+  const runId = `run-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  console.log(`Starting controller run: ${runId}`);
 
   while (!state.done && state.iteration < maxIterations) {
     console.log("starting iteration: ", state.iteration);
@@ -80,18 +82,28 @@ export async function runController(input: ControllerInput) {
           break;
         }
 
-        const files = matches.map((m) => m.file);
-
         // Store files for current sub-question
         if (state.currentSubQuestionId) {
-          state.filesBySubQuestion.set(state.currentSubQuestionId, files);
+          state.filesBySubQuestion.set(state.currentSubQuestionId, matches);
         }
 
-        // Merge all files from all sub-questions for display
-        const allFiles = Array.from(state.filesBySubQuestion.values()).flat();
-        state.relevantFiles = allFiles.filter(
-          (f, i, arr) => arr.findIndex((x) => x.path === f.path) === i,
-        );
+        const allMatches = Array.from(state.filesBySubQuestion.values()).flat();
+
+        // Remove duplicates, keeping the highest score for each file
+        const bestScoreByPath = new Map<string, number>();
+        const bestMatchByPath = new Map<string, any>();
+
+        for (const match of allMatches) {
+          const currentScore =
+            bestScoreByPath.get(match.file.path) ?? -Infinity;
+          if (match.score > currentScore) {
+            bestScoreByPath.set(match.file.path, match.score);
+            bestMatchByPath.set(match.file.path, match);
+          }
+        }
+
+        // Sort by score (highest first)
+        state.relevantFiles = Array.from(bestMatchByPath.values());
 
         console.log(
           `Found ${matches.length} relevant files for this sub-question:`,
@@ -119,9 +131,14 @@ export async function runController(input: ControllerInput) {
 
       // read a specific file and extract a summary
       case "summarize_file": {
-        console.log("summarize_file - path:", action.path);
+        console.log("summarize_file:", action.path);
 
-        const file = state.repoFiles.find((f) => f.path === action.path);
+        const match = state.relevantFiles.find(
+          (m) => m.file.path === action.path,
+        );
+        const file =
+          match?.file ?? state.repoFiles.find((f) => f.path === action.path);
+
         if (!file) {
           console.log("File not found in repoFiles.");
           break;

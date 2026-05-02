@@ -210,7 +210,7 @@ export async function embedFiles(
   // - reuse cached embeddings when possible
   // - collect only missing/changed files for fresh embedding
   for (const file of files) {
-    console.log("Checking cache for file: ", file.path);
+    // console.log("Checking cache for file: ", file.path);
     const text = `FILE: ${file.path}\n${file.content.slice(0, 12000)}`;
     const textHash = hashText(text);
     const cached = cache.files[file.path];

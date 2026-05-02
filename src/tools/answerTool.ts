@@ -6,15 +6,15 @@ export async function answerTool(
   state: ControllerState,
 ): Promise<AskCodebaseResult> {
   const filesToUse =
-    state.mode === "analyze" && state.filesRead.length > 0
+    state.mode === "ask" && state.filesRead.length > 0
       ? state.filesRead.map((item) => item.file)
       : state.relevantFiles.length > 0
-        ? state.relevantFiles
+        ? state.relevantFiles.map((item) => item.file)
         : state.repoFiles;
 
-  // Build evidence section for analyze mode with file summaries
+  // Build evidence section for ask mode with file summaries
   const evidenceSection =
-    state.mode === "analyze" && state.filesRead.length > 0
+    state.mode === "ask" && state.filesRead.length > 0
       ? `
 ## Gathered Evidence
 

@@ -1,4 +1,4 @@
-import type { RepoFile } from "../loadFiles.js";
+import type { RepoFile, ScoredRepoFile } from "../loadFiles.js";
 import type { AskCodebaseResult } from "../ask.js";
 import type { SubQuestion } from "../tools/decomposeQueryTool.js";
 
@@ -22,13 +22,13 @@ export type ControllerState = {
   mode: AgentMode;
 
   repoFiles: RepoFile[];
-  relevantFiles: RepoFile[];
+  relevantFiles: ScoredRepoFile[];
   filesRead: FileSummary[];
   notes: string[];
 
   subQuestions: SubQuestion[];
   currentSubQuestionId: string | undefined;
-  filesBySubQuestion: Map<string, RepoFile[]>;
+  filesBySubQuestion: Map<string, ScoredRepoFile[]>;
 
   steps: string[];
   finalAnswer?: string;
