@@ -63,6 +63,8 @@ export async function runController(input: ControllerInput) {
         state.subQuestions =
           queryPlan.type === "decomposed" ? queryPlan.subQuestions : [];
 
+        console.log("Decomposed query plan:", queryPlan);
+
         if (state.subQuestions.length > 0) {
           console.log(
             `Decomposed into ${state.subQuestions.length} sub-questions:`,
