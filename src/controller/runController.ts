@@ -8,7 +8,9 @@ import { loadRepoTool } from "../tools/loadRepoTool.js";
 import { searchFilesTool } from "../tools/searchFilesTool.js";
 import { summarizeFileTool } from "../tools/readFileTool.js";
 import { answerTool } from "../tools/answerTool.js";
-import { decomposeQuery } from "../tools/decomposeQueryTool.js";
+import { shapeQuery } from "../tools/decomposeQueryTool.js";
+import { getQueryComplexity } from "../tools/queryComplexity.js";
+import { restructureQuery } from "../tools/restructureQuery.js";
 
 export async function runController(input: ControllerInput) {
   const state: ControllerState = {
@@ -54,18 +56,29 @@ export async function runController(input: ControllerInput) {
 
       case "decompose_query": {
         console.log("decompose_query - breaking down user goal");
-        const subQuestions = await decomposeQuery(state.userGoal);
-        state.subQuestions = subQuestions;
-        state.currentSubQuestionId = subQuestions[0]?.id;
+        const complexity = getQueryComplexity(state.userGoal);
+        const restructureState = restructureQuery(state.userGoal, complexity);
+        const queryPlan = await shapeQuery(restructureState);
 
-        console.log(`Decomposed into ${subQuestions.length} sub-questions:`);
-        subQuestions.forEach((sq, i) => {
-          console.log(`  ${i + 1}. ${sq.question}`);
-        });
+        state.subQuestions =
+          queryPlan.type === "decomposed" ? queryPlan.subQuestions : [];
 
-        state.notes.push(
-          `Decomposed user goal into ${subQuestions.length} sub-questions for targeted analysis.`,
-        );
+        if (state.subQuestions.length > 0) {
+          console.log(
+            `Decomposed into ${state.subQuestions.length} sub-questions:`,
+          );
+          state.subQuestions.forEach((sq, index) => {
+            console.log(`${index + 1}. ${sq.question}`);
+          });
+        } else {
+          console.log(
+            "No sub-questions generated. Will treat as single query.",
+          );
+          // TODO: overrite original?
+          state.userGoal =
+            queryPlan.type === "single" ? queryPlan.query : state.userGoal;
+        }
+
         break;
       }
 
@@ -82,48 +95,54 @@ export async function runController(input: ControllerInput) {
           break;
         }
 
-        // Store files for current sub-question
-        if (state.currentSubQuestionId) {
-          state.filesBySubQuestion.set(state.currentSubQuestionId, matches);
-        }
-
-        const allMatches = Array.from(state.filesBySubQuestion.values()).flat();
-
-        // Remove duplicates, keeping the highest score for each file
-        const bestScoreByPath = new Map<string, number>();
-        const bestMatchByPath = new Map<string, any>();
-
-        for (const match of allMatches) {
-          const currentScore =
-            bestScoreByPath.get(match.file.path) ?? -Infinity;
-          if (match.score > currentScore) {
-            bestScoreByPath.set(match.file.path, match.score);
-            bestMatchByPath.set(match.file.path, match);
+        if (state.subQuestions.length > 0) {
+          // Store files for current sub-question
+          if (state.currentSubQuestionId) {
+            state.filesBySubQuestion.set(state.currentSubQuestionId, matches);
           }
-        }
 
-        // Sort by score (highest first)
-        state.relevantFiles = Array.from(bestMatchByPath.values());
+          const allMatches = Array.from(
+            state.filesBySubQuestion.values(),
+          ).flat();
 
-        console.log(
-          `Found ${matches.length} relevant files for this sub-question:`,
-        );
-        matches.forEach((m, index) => {
-          console.log(`${index + 1}. [score=${m.score}] ${m.file.path}`);
-        });
+          // Remove duplicates, keeping the highest score for each file
+          const bestScoreByPath = new Map<string, number>();
+          const bestMatchByPath = new Map<string, any>();
 
-        state.notes.push(
-          `[Sub-Q ${state.currentSubQuestionId}] Found ${matches.length} files for: "${action.query}".`,
-        );
+          for (const match of allMatches) {
+            const currentScore =
+              bestScoreByPath.get(match.file.path) ?? -Infinity;
+            if (match.score > currentScore) {
+              bestScoreByPath.set(match.file.path, match.score);
+              bestMatchByPath.set(match.file.path, match);
+            }
+          }
 
-        // Mark current sub-question as answered
-        if (state.currentSubQuestionId) {
-          const subQ = state.subQuestions.find(
-            (sq) => sq.id === state.currentSubQuestionId,
+          // Sort by score (highest first)
+          state.relevantFiles = Array.from(bestMatchByPath.values());
+
+          console.log(
+            `Found ${matches.length} relevant files for this sub-question:`,
           );
-          if (subQ) {
-            subQ.answered = true;
+          matches.forEach((m, index) => {
+            console.log(`${index + 1}. [score=${m.score}] ${m.file.path}`);
+          });
+
+          state.notes.push(
+            `[Sub-Q ${state.currentSubQuestionId}] Found ${matches.length} files for: "${action.query}".`,
+          );
+
+          // Mark current sub-question as answered
+          if (state.currentSubQuestionId) {
+            const subQ = state.subQuestions.find(
+              (sq) => sq.id === state.currentSubQuestionId,
+            );
+            if (subQ) {
+              subQ.answered = true;
+            }
           }
+        } else {
+          state.relevantFiles = matches;
         }
 
         break;
