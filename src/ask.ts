@@ -89,10 +89,10 @@ function scoreChunkKeywordFromTokens(
  */
 function pickTopKeywordChunks(
   question: string,
+  qTokens: string[],
   chunks: FileChunk[],
   limit = 40,
 ): FileChunk[] {
-  const qTokens = uniqueTokens(question);
   const questionLower = question.toLowerCase();
 
   return [...chunks]
@@ -165,9 +165,11 @@ async function pickHybridTopChunks(
   candidateLimit = 40,
   finalTopChunkLimit = 10,
 ): Promise<FileChunk[]> {
+  const qTokens = uniqueTokens(question);
   // Step 1: cheap keyword filter to reduce embedding volume.
   const candidateChunks = pickTopKeywordChunks(
     question,
+    qTokens,
     chunks,
     candidateLimit,
   );
@@ -183,7 +185,6 @@ async function pickHybridTopChunks(
   const queryEmbedding = await embedQuery(question);
 
   // Step 4: compute both keyword scores and semantic similarity scores.
-  const qTokens = uniqueTokens(question);
   const questionLower = question.toLowerCase();
 
   const keywordScores = embeddedChunks.map((chunk) =>
