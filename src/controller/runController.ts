@@ -8,9 +8,9 @@ import { loadRepoTool } from "../tools/loadRepoTool.js";
 import { searchFilesTool } from "../tools/searchFilesTool.js";
 import { summarizeFileTool } from "../tools/readFileTool.js";
 import { answerTool } from "../tools/answerTool.js";
-import { shapeQuery } from "../tools/decomposeQueryTool.js";
+import { getQueryPlan } from "../tools/decomposeQueryTool.js";
 import { getQueryComplexity } from "../tools/queryComplexity.js";
-import { restructureQuery } from "../tools/restructureQuery.js";
+import { restructureQueryObj } from "../tools/restructureQuery.js";
 
 export async function runController(input: ControllerInput) {
   const state: ControllerState = {
@@ -58,11 +58,11 @@ export async function runController(input: ControllerInput) {
       case "decompose_query": {
         console.log("decompose_query - breaking down user goal");
         const complexity = getQueryComplexity(state.originalUserQuestion);
-        const restructureState = restructureQuery(
+        const restructureState = restructureQueryObj(
           state.originalUserQuestion,
           complexity,
         );
-        const queryPlan = await shapeQuery(restructureState);
+        const queryPlan = await getQueryPlan(restructureState);
 
         state.subQuestions =
           queryPlan.type === "decomposed" ? queryPlan.subQuestions : [];

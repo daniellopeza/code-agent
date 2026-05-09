@@ -25,7 +25,7 @@ export type QueryPlan =
       reasoning?: string;
     };
 
-export async function shapeQuery(
+export async function getQueryPlan(
   state: QueryRestructureState,
 ): Promise<QueryPlan> {
   if (state.shouldDecompose) {

@@ -31,7 +31,7 @@ export type QueryRestructureState = {
   guidance: string;
 };
 
-export function restructureQuery(
+export function restructureQueryObj(
   query: string,
   complexity: QueryComplexityResult,
 ): QueryRestructureState {

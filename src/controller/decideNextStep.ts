@@ -1,8 +1,4 @@
 import type { ControllerAction, ControllerState } from "./types.js";
-import {
-  getQueryComplexity,
-  isComplexQuery,
-} from "../tools/queryComplexity.js";
 
 export function decideNextStep(state: ControllerState): ControllerAction {
   if (state.repoFiles.length === 0) {
@@ -12,9 +8,6 @@ export function decideNextStep(state: ControllerState): ControllerAction {
   // In ask mode, only decompose medium/complex questions after loading files.
   // can we do async or simultaneous??
   if (state.mode === "ask" && state.iteration === 2) {
-    const complexity = getQueryComplexity(state.originalUserQuestion);
-
-    console.log("Query complexity:", complexity);
     return { type: "decompose_query" };
   }
 
