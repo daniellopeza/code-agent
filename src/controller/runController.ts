@@ -15,7 +15,8 @@ import { restructureQuery } from "../tools/restructureQuery.js";
 export async function runController(input: ControllerInput) {
   const state: ControllerState = {
     repoPath: input.repoPath,
-    userGoal: input.userGoal,
+    originalUserQuestion: input.userPrompt,
+    rephrasedUserQuestion: "",
     mode: input.mode,
 
     repoFiles: [],
@@ -56,14 +57,17 @@ export async function runController(input: ControllerInput) {
 
       case "decompose_query": {
         console.log("decompose_query - breaking down user goal");
-        const complexity = getQueryComplexity(state.userGoal);
-        const restructureState = restructureQuery(state.userGoal, complexity);
+        const complexity = getQueryComplexity(state.originalUserQuestion);
+        const restructureState = restructureQuery(
+          state.originalUserQuestion,
+          complexity,
+        );
         const queryPlan = await shapeQuery(restructureState);
 
         state.subQuestions =
           queryPlan.type === "decomposed" ? queryPlan.subQuestions : [];
 
-        console.log("Decomposed query plan:", queryPlan);
+        console.log("Generated query plan:", queryPlan);
 
         if (state.subQuestions.length > 0) {
           console.log(
@@ -76,9 +80,12 @@ export async function runController(input: ControllerInput) {
           console.log(
             "No sub-questions generated. Will treat as single query.",
           );
-          // TODO: overrite original?
-          state.userGoal =
-            queryPlan.type === "single" ? queryPlan.query : state.userGoal;
+
+          // rephrase to improve retrieval, but store original question for tracking
+          state.rephrasedUserQuestion =
+            queryPlan.type === "single"
+              ? queryPlan.query
+              : state.originalUserQuestion;
         }
 
         break;

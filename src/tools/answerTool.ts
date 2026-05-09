@@ -44,10 +44,14 @@ ${subQuestionSection}
 
 ${evidenceSection}
 
-User Goal: ${state.userGoal}
+User Goal: ${state.originalUserQuestion}
 
 Please synthesize the gathered evidence to answer the original question comprehensively.
   `.trim();
 
-  return await askCodebase(filesToUse, state.userGoal, enrichedQuestion);
+  return await askCodebase(
+    filesToUse,
+    state.originalUserQuestion,
+    enrichedQuestion,
+  );
 }

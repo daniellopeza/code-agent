@@ -6,7 +6,7 @@ export type AgentMode = "ask" | "analyze" | "explain" | "plan";
 
 export type ControllerInput = {
   repoPath: string;
-  userGoal: string;
+  userPrompt: string;
   mode: AgentMode;
   verbose?: boolean;
 };
@@ -18,7 +18,8 @@ export type FileSummary = {
 
 export type ControllerState = {
   repoPath: string;
-  userGoal: string;
+  originalUserQuestion: string;
+  rephrasedUserQuestion: string;
   mode: AgentMode;
 
   repoFiles: RepoFile[];

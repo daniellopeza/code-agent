@@ -44,7 +44,7 @@ program
 
       const result = await runController({
         repoPath,
-        userGoal: question,
+        userPrompt: question,
         mode: "ask",
         verbose: options.verbose ?? false,
       });

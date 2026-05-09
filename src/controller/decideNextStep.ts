@@ -12,7 +12,7 @@ export function decideNextStep(state: ControllerState): ControllerAction {
   // In ask mode, only decompose medium/complex questions after loading files.
   // can we do async or simultaneous??
   if (state.mode === "ask" && state.iteration === 2) {
-    const complexity = getQueryComplexity(state.userGoal);
+    const complexity = getQueryComplexity(state.originalUserQuestion);
 
     console.log("Query complexity:", complexity);
     return { type: "decompose_query" };
@@ -28,8 +28,8 @@ export function decideNextStep(state: ControllerState): ControllerAction {
   }
 
   if (state.relevantFiles.length === 0) {
-    console.log(" SEARCH FILES for MAIN GOAL: ");
-    return { type: "search_files", query: state.userGoal };
+    console.log(" > search files using single rephrased user question: ");
+    return { type: "search_files", query: state.rephrasedUserQuestion };
   }
 
   if (state.mode === "ask") {
